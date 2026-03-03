@@ -1,0 +1,25 @@
+# Python venv
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Data and outputs (keep raw configs/checkpoints if you want tracked)
+data/wlasl/videos/
+data/wlasl/keypoints/
+confusion_matrix.npy
+metrics.json
+
+# Checkpoints (comment out if you want them tracked)
+checkpoints/
+
+# IDE / OS junk
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

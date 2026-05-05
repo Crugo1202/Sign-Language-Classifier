@@ -39,9 +39,10 @@ class CrossModalBlock(nn.Module):
         ctx_c: torch.Tensor,
         attn: nn.MultiheadAttention,
         norm: nn.LayerNorm,
+        key_padding_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         ctx = torch.cat([ctx_a, ctx_b, ctx_c], dim=1)
-        out, _ = attn(q_seq, ctx, ctx)
+        out, _ = attn(q_seq, ctx, ctx, key_padding_mask=key_padding_mask)
         z = norm(q_seq + out)
         return self.ffn_norm(z + self.ffn(z))
 
@@ -51,11 +52,17 @@ class CrossModalBlock(nn.Module):
         t_seq: torch.Tensor,
         f_seq: torch.Tensor,
         d_seq: torch.Tensor,
+        valid_mask: torch.Tensor | None = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        s = self._update(s_seq, t_seq, f_seq, d_seq, self.attn_s, self.norm_s)
-        t = self._update(t_seq, s_seq, f_seq, d_seq, self.attn_t, self.norm_t)
-        f = self._update(f_seq, s_seq, t_seq, d_seq, self.attn_f, self.norm_f)
-        d = self._update(d_seq, s_seq, t_seq, f_seq, self.attn_d, self.norm_d)
+        key_padding_mask = None
+        if valid_mask is not None:
+            ctx_mask = torch.cat([valid_mask, valid_mask, valid_mask], dim=1)
+            key_padding_mask = ~ctx_mask.bool()
+
+        s = self._update(s_seq, t_seq, f_seq, d_seq, self.attn_s, self.norm_s, key_padding_mask)
+        t = self._update(t_seq, s_seq, f_seq, d_seq, self.attn_t, self.norm_t, key_padding_mask)
+        f = self._update(f_seq, s_seq, t_seq, d_seq, self.attn_f, self.norm_f, key_padding_mask)
+        d = self._update(d_seq, s_seq, t_seq, f_seq, self.attn_d, self.norm_d, key_padding_mask)
         return s, t, f, d
 
 
@@ -193,7 +200,9 @@ class TFTSignLite(nn.Module):
         t_seq = self._modality_dropout(t_seq)
         f_seq = self._modality_dropout(f_seq)
         d_seq = self._modality_dropout(d_seq)
-        s_enh, t_enh, f_enh, d_enh = self.cross_block(s_seq, t_seq, f_seq, d_seq)
+        s_enh, t_enh, f_enh, d_enh = self.cross_block(
+            s_seq, t_seq, f_seq, d_seq, valid_mask=valid_mask
+        )
 
         pooled = torch.cat(
             [

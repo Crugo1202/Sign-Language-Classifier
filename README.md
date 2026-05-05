@@ -1,72 +1,88 @@
-## LSTM Sign Language Classifier
+# DSLNet-Upgraded (WLASL)
 
-This project implements an LSTM-based sign language classifier on the WLASL dataset using MediaPipe hand keypoints and PyTorch.
+This repository is scaffolded from your upgraded DSLNet plan:
 
-### Project structure
+- Dual-hand handshape encoding (`TSSN-R` + `TSSN-L`)
+- Dual-wrist trajectory encoder (`FTDE-Dual`)
+- Face non-manual stream (`NMN`)
+- 3-way fusion with geometric consistency losses
 
-- **`requirements.txt`**: Python dependencies.
-- **`config.py`**: Paths and hyperparameters.
-- **`data/`**: Place WLASL JSON and videos here (see below).
-- **`src/extract_keypoints.py`**: Extract MediaPipe hand landmarks from videos into `.npy` sequences and build metadata.
-- **`src/dataset.py`**: PyTorch dataset and collate utilities.
-- **`src/model.py`**: BiLSTM classifier with attention pooling.
-- **`src/train.py`**: Training loop (train/val).
-- **`src/evaluate.py`**: Offline evaluation on the test split.
+## Project Structure
 
-### Setup
+```text
+data/
+  preprocess.py
+models/
+  tssn.py
+  ftde.py
+  nmn.py
+  fusion.py
+  dslnet_upgraded.py
+  losses.py
+train.py
+eval.py
+config.yaml
+```
 
-1. Create and activate a virtual environment (recommended).
-2. Install dependencies:
+## Obtaining WLASL (official download)
+
+This training code does not fetch videos automatically. Use the **official WLASL repository** and its scripts:
+
+- Repository: [dxli94/WLASL](https://github.com/dxli94/WLASL)
+- Read the **Computational Use of Data Agreement (C-UDA)** in that repo before using the data.
+- Typical flow (see their `README`):
+  1. `git clone https://github.com/dxli94/WLASL.git`
+  2. In `start_kit/`, run `python video_downloader.py` (uses `yt-dlp` to pull YouTube sources listed in the JSON).
+  3. Run `python preprocess.py` to cut clips into `videos/` as in their instructions.
+- If many URLs are dead, their README describes `find_missing.py` and a form to request missing or pre-processed videos.
+
+After you have video clips, you still need a **skeleton extraction** step (e.g. MediaPipe Holistic) to produce the arrays described below, then save one `.npz` per instance for this project.
+
+## Data Format
+
+Put sample `.npz` files in:
+
+- `data/skeletons/train`
+- `data/skeletons/val`
+- `data/skeletons/test`
+
+Each `.npz` must contain `label`, and either:
+
+1) Preprocessed keys:
+- `right_hand_shape` `(T, 21, 3)`
+- `left_hand_shape` `(T, 21, 3)`
+- `dual_wrist_traj` `(T, 6)`
+- `face_landmarks_norm` `(T, K, 3)` where `K` is fixed semantic facial keypoints (recommended 60-80)
+
+or 2) Raw keys (will be preprocessed on load):
+- `right_hand` `(T, 21, 3)`
+- `left_hand` `(T, 21, 3)`
+- `face` `(T, 468/478, 3)` or selected facial keypoints `(T, K, 3)`
+- `pose` `(T, 33, 3)`
+
+## Install
 
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Download WLASL (e.g. from the official repo) and arrange files as:
-
-```text
-data/
-  wlasl/
-    WLASL_v0.3.json
-    videos/
-      <video_id>.mp4
-    keypoints/        # created by extract_keypoints.py
-    metadata.csv      # created by extract_keypoints.py
-```
-
-### Keypoint extraction
-
-From the repo root:
+## Train
 
 ```bash
-python -m src.extract_keypoints \
-  --json data/wlasl/WLASL_v0.3.json \
-  --videos data/wlasl/videos \
-  --out data/wlasl/keypoints \
-  --metadata data/wlasl/metadata.csv
+python train.py --config config.yaml
 ```
 
-This will run MediaPipe Hands on each WLASL instance and write sequences as `.npy` files plus a `metadata.csv` mapping filenames to gloss and split.
-
-### Training
+## Evaluate
 
 ```bash
-python -m src.train \
-  --metadata data/wlasl/metadata.csv \
-  --keypoints data/wlasl/keypoints \
-  --epochs 20
+python eval.py --config config.yaml --checkpoint checkpoints/dslnet_upgraded_best.pt
 ```
 
-The best model checkpoint is saved under `checkpoints/`.
+## Notes
 
-### Evaluation
-
-```bash
-python -m src.evaluate \
-  --checkpoint checkpoints/best_model.pt \
-  --metadata data/wlasl/metadata.csv \
-  --keypoints data/wlasl/keypoints
-```
-
-This yields overall test accuracy, per-class accuracy, and a confusion matrix (`confusion_matrix.npy`).
-
+- `data/preprocess.py` includes:
+  - wrist-centric and face-centric normalization
+  - missing landmark interpolation
+  - temporal resampling to `T_max`
+  - augmentation hooks (rotation, scaling, noise, temporal stretch, mirroring)
+- Hyperparameters match the plan defaults in `config.yaml`.

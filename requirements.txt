@@ -1,6 +1,5 @@
-torch
-mediapipe
-opencv-python
 numpy
+pyyaml
 tqdm
-scikit-learn
+torch
+torchvision

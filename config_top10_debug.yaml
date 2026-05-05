@@ -1,0 +1,60 @@
+seed: 42
+device: "cuda"
+num_classes: 10
+
+data:
+  root: "data/skeletons"
+  train_split: "train"
+  val_split: "val"
+  test_split: "test"
+  t_max: 64
+  num_workers: 4
+
+train:
+  epochs: 80
+  batch_size: 16
+  learning_rate: 0.0003
+  weight_decay: 0.0005
+  warmup_epochs: 3
+  label_smoothing: 0.1
+  alpha_geo: 0.1
+  beta_sym: 0.05
+  grad_clip: 1.0
+  save_dir: "checkpoints"
+  save_name: "dslnet_top10_debug_best.pt"
+
+preprocess:
+  rotation_deg: 12.0
+  scale_range: [0.9, 1.1]
+  noise_std: 0.01
+  temporal_stretch: [0.85, 1.15]
+  mirror_prob: 0.3
+  align_hands_to_palm: true
+
+model:
+  tssn:
+    k: 8
+    temporal_kernel: 9
+    hidden_size: 128
+    lstm_layers: 1
+    attn_heads: 4
+    output_dim: 256
+  ftde:
+    conv_channels: 48
+    conv_kernel: 7
+    hidden_size: 128
+    lstm_layers: 1
+    alpha_finsler: 1.5
+    temperature_tau: 0.5
+  nmn:
+    grouped_channels: 16
+    temporal_channels: 96
+    temporal_kernel: 5
+    hidden_size: 128
+  orientation:
+    hidden_dim: 64
+  fusion:
+    hand_heads: 4
+    modal_heads: 4
+    shared_dim: 256
+    final_dim: 256

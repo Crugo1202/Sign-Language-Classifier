@@ -1,25 +1,34 @@
-# Python venv
-.venv/
-venv/
-
-# Python cache
+# Python caches
 __pycache__/
 *.py[cod]
-*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
 
-# Data and outputs (keep raw configs/checkpoints if you want tracked)
-data/wlasl/videos/
-data/wlasl/keypoints/
-confusion_matrix.npy
-metrics.json
+# Logs
+logs/
+*.log
+debug-*.log
 
-# Checkpoints (comment out if you want them tracked)
+# Training outputs
 checkpoints/
+runs/
+wandb/
+tensorboard/
+*.pt
+*.pth
+*.ckpt
 
-# IDE / OS junk
-.vscode/
-.idea/
-*.swp
-*.swo
-.DS_Store
-Thumbs.db
+# Dataset and generated data artifacts
+data/**
+!data/
+!data/*.py
+data/**/*.npz
+data/**/*.npy
+data/**/*.mp4
+data/**/*.avi
+data/**/*.mov
+data/**/*.json
+data/**/*.csv
+

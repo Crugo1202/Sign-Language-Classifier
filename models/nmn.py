@@ -22,8 +22,11 @@ class NonManualNetwork(nn.Module):
         temporal_channels: int = 128,
         temporal_kernel: int = 5,
         hidden_size: int = 128,
+        dropout: float = 0.0,
+        attn_dropout: float | None = None,
     ):
         super().__init__()
+        attn_dropout = dropout if attn_dropout is None else attn_dropout
         # face + delta => 6 channels, then compress keypoint interactions
         self.spatial = nn.Conv2d(
             in_channels=6, out_channels=grouped_channels, kernel_size=1, stride=1, bias=False
@@ -44,6 +47,8 @@ class NonManualNetwork(nn.Module):
             batch_first=True,
             bidirectional=True,
         )
+        self.lstm_dropout = nn.Dropout(dropout)
+        self.attn_dropout = nn.Dropout(attn_dropout)
         self.attn = nn.Linear(hidden_size * 2, 1)
 
     def forward(
@@ -61,10 +66,12 @@ class NonManualNetwork(nn.Module):
         x = F.relu(self.temporal_norm(self.temporal(x)))  # (B, temporal_channels, T)
         x = x.permute(0, 2, 1)  # (B, T, temporal_channels)
         seq, _ = self.lstm(x)  # (B, T, 256)
+        seq = self.lstm_dropout(seq)
 
         attn_logits = self.attn(seq)
         if valid_mask is not None:
             attn_logits = attn_logits.masked_fill(~valid_mask.bool().unsqueeze(-1), -1e4)
         attn_w = F.softmax(attn_logits, dim=1)  # (B, T, 1)
+        attn_w = self.attn_dropout(attn_w)
         pooled = torch.sum(attn_w * seq, dim=1)  # (B, 256)
         return pooled, seq

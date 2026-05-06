@@ -26,6 +26,8 @@ class DSLNetUpgraded(nn.Module):
         ftde_cfg = cfg["ftde"]
         nmn_cfg = cfg["nmn"]
         fusion_cfg = cfg["fusion"]
+        dropout = fusion_cfg.get("dropout", 0.0)
+        modality_dropout = fusion_cfg.get("modality_dropout", 0.0)
 
         self.right_tssn = TSSNEncoder(
             k=tssn_cfg["k"],
@@ -34,6 +36,7 @@ class DSLNetUpgraded(nn.Module):
             lstm_layers=tssn_cfg["lstm_layers"],
             attn_heads=tssn_cfg["attn_heads"],
             output_dim=tssn_cfg["output_dim"],
+            dropout=dropout,
         )
         self.left_tssn = TSSNEncoder(
             k=tssn_cfg["k"],
@@ -42,9 +45,12 @@ class DSLNetUpgraded(nn.Module):
             lstm_layers=tssn_cfg["lstm_layers"],
             attn_heads=tssn_cfg["attn_heads"],
             output_dim=tssn_cfg["output_dim"],
+            dropout=dropout,
         )
 
-        self.hand_fusion = HandShapeFusion(dim=tssn_cfg["output_dim"], heads=fusion_cfg["hand_heads"])
+        self.hand_fusion = HandShapeFusion(
+            dim=tssn_cfg["output_dim"], heads=fusion_cfg["hand_heads"], dropout=dropout
+        )
         self.ftde = FTDEDual(
             conv_channels=ftde_cfg["conv_channels"],
             conv_kernel=ftde_cfg["conv_kernel"],
@@ -52,12 +58,14 @@ class DSLNetUpgraded(nn.Module):
             lstm_layers=ftde_cfg["lstm_layers"],
             alpha_finsler=ftde_cfg["alpha_finsler"],
             temperature_tau=ftde_cfg["temperature_tau"],
+            dropout=dropout,
         )
         self.nmn = NonManualNetwork(
             grouped_channels=nmn_cfg["grouped_channels"],
             temporal_channels=nmn_cfg["temporal_channels"],
             temporal_kernel=nmn_cfg["temporal_kernel"],
             hidden_size=nmn_cfg["hidden_size"],
+            dropout=dropout,
         )
         s_dim = tssn_cfg["output_dim"]
         t_dim = ftde_cfg["hidden_size"] * 2
@@ -70,7 +78,10 @@ class DSLNetUpgraded(nn.Module):
             shared_dim=fusion_cfg["shared_dim"],
             modal_heads=fusion_cfg["modal_heads"],
             final_dim=fusion_cfg["final_dim"],
+            dropout=dropout,
+            modality_dropout=modality_dropout,
         )
+        self.classifier_dropout = nn.Dropout(dropout)
         self.classifier = nn.Linear(fusion_cfg["final_dim"], num_classes)
 
     def forward(self, batch: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
@@ -88,7 +99,7 @@ class DSLNetUpgraded(nn.Module):
         f_f, _ = self.nmn(face, valid_mask=valid_mask)
 
         f_final, enhanced = self.fusion(f_s, f_t, f_f)  # (B, 512)
-        logits = self.classifier(f_final)
+        logits = self.classifier(self.classifier_dropout(f_final))
 
         enhanced["right_hand_pooled"] = right_pool
         enhanced["left_hand_pooled"] = left_pool

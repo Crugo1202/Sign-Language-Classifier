@@ -102,6 +102,7 @@ class TFTSignLite(nn.Module):
             lstm_layers=tssn_cfg["lstm_layers"],
             attn_heads=tssn_cfg["attn_heads"],
             output_dim=tssn_cfg["output_dim"],
+            dropout=dropout,
         )
         self.left_tssn = TSSNEncoder(
             k=tssn_cfg["k"],
@@ -110,6 +111,7 @@ class TFTSignLite(nn.Module):
             lstm_layers=tssn_cfg["lstm_layers"],
             attn_heads=tssn_cfg["attn_heads"],
             output_dim=tssn_cfg["output_dim"],
+            dropout=dropout,
         )
         self.ftde = FTDEDual(
             conv_channels=ftde_cfg["conv_channels"],
@@ -118,12 +120,14 @@ class TFTSignLite(nn.Module):
             lstm_layers=ftde_cfg["lstm_layers"],
             alpha_finsler=ftde_cfg["alpha_finsler"],
             temperature_tau=ftde_cfg["temperature_tau"],
+            dropout=dropout,
         )
         self.nmn = NonManualNetwork(
             grouped_channels=nmn_cfg["grouped_channels"],
             temporal_channels=nmn_cfg["temporal_channels"],
             temporal_kernel=nmn_cfg["temporal_kernel"],
             hidden_size=nmn_cfg["hidden_size"],
+            dropout=dropout,
         )
 
         shared_dim = fusion_cfg.get("shared_dim", 512)

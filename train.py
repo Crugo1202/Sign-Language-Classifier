@@ -13,7 +13,7 @@ from torch.optim import AdamW
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
-from data.preprocess import PreprocessConfig, preprocess_sample
+from data.preprocess import PreprocessConfig, apply_feature_augmentation, preprocess_sample
 from models import DSLNetUpgraded, DSLNetUpgradedLoss
 
 
@@ -98,6 +98,12 @@ class WLASLSkeletonDataset(Dataset):
             }
             if "hand_orientation" in keys:
                 sample["hand_orientation"] = item["hand_orientation"].astype(np.float32)
+            if "valid_mask" in keys:
+                sample["valid_mask"] = item["valid_mask"].astype(np.bool_)
+            if "valid_length" in keys:
+                sample["valid_length"] = np.int64(item["valid_length"])
+            if self.training:
+                sample = apply_feature_augmentation(sample, self.cfg)
         else:
             raw = {
                 "right_hand": item["right_hand"].astype(np.float32),

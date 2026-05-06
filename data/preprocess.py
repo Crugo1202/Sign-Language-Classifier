@@ -85,6 +85,114 @@ def _uniform_resample_with_valid_length(sequence: np.ndarray, target_t: int) -> 
     return _uniform_resample(sequence, target_t), int(valid_len)
 
 
+def _infer_feature_valid_length(sample: Dict[str, np.ndarray], t_max: int) -> int:
+    if "valid_mask" in sample:
+        return int(np.clip(sample["valid_mask"].astype(np.bool_).sum(), 1, t_max))
+    if "valid_length" in sample:
+        return int(np.clip(sample["valid_length"], 1, t_max))
+
+    signal = (
+        np.abs(sample["right_hand_shape"]).sum(axis=(1, 2))
+        + np.abs(sample["left_hand_shape"]).sum(axis=(1, 2))
+        + np.abs(sample["dual_wrist_traj"]).sum(axis=1)
+        + np.abs(sample["face_landmarks_norm"]).sum(axis=(1, 2))
+    )
+    valid = np.where(signal > 1e-6)[0]
+    if len(valid) == 0:
+        return min(t_max, sample["right_hand_shape"].shape[0])
+    return int(np.clip(valid[-1] + 1, 1, t_max))
+
+
+def _rotate_dual_traj(dual_traj: np.ndarray, angle_rad: float) -> np.ndarray:
+    shape = dual_traj.shape
+    traj = dual_traj.reshape(shape[0], 2, 3)
+    return _rotation_y(traj, angle_rad).reshape(shape).astype(np.float32)
+
+
+def _add_feature_noise(x: np.ndarray, noise_std: float) -> np.ndarray:
+    if noise_std <= 0.0:
+        return x
+    return x + np.random.normal(0.0, noise_std, size=x.shape).astype(np.float32)
+
+
+def apply_feature_augmentation(
+    sample: Dict[str, np.ndarray], cfg: PreprocessConfig
+) -> Dict[str, np.ndarray]:
+    """
+    Training-time augmentation for already-normalized feature NPZ samples.
+    Operates on the valid prefix only, then pads/resamples back to cfg.t_max.
+    """
+    out = {k: v.copy() for k, v in sample.items()}
+    valid_len = _infer_feature_valid_length(out, cfg.t_max)
+    angle = np.deg2rad(np.random.uniform(-cfg.rotation_deg, cfg.rotation_deg))
+    scale = np.random.uniform(cfg.scale_range[0], cfg.scale_range[1])
+    stretch = np.random.uniform(cfg.temporal_stretch[0], cfg.temporal_stretch[1])
+    mirror = np.random.rand() < cfg.mirror_prob
+
+    seqs: Dict[str, np.ndarray] = {}
+    for key in ("right_hand_shape", "left_hand_shape", "face_landmarks_norm"):
+        if key in out and out[key].size > 0:
+            seq = out[key][:valid_len]
+            seq = _rotation_y(seq, angle) * scale
+            seqs[key] = _add_feature_noise(seq.astype(np.float32), cfg.noise_std)
+
+    if "dual_wrist_traj" in out and out["dual_wrist_traj"].size > 0:
+        seq = out["dual_wrist_traj"][:valid_len]
+        seq = _rotate_dual_traj(seq, angle) * scale
+        seqs["dual_wrist_traj"] = _add_feature_noise(seq.astype(np.float32), cfg.noise_std)
+
+    if "hand_orientation" in out and out["hand_orientation"].size > 0:
+        seqs["hand_orientation"] = out["hand_orientation"][:valid_len].astype(np.float32)
+
+    stretched_len = max(1, int(round(valid_len * stretch)))
+    augmented: Dict[str, np.ndarray] = {}
+    for key, seq in seqs.items():
+        if seq.shape[0] > 1:
+            seq = _temporal_stretch(seq, stretch)
+        augmented[key] = seq.astype(np.float32)
+
+    if mirror:
+        right = augmented.get("right_hand_shape")
+        left = augmented.get("left_hand_shape")
+        if right is not None and left is not None:
+            augmented["right_hand_shape"] = left.copy()
+            augmented["left_hand_shape"] = right.copy()
+            augmented["right_hand_shape"][..., 0] *= -1.0
+            augmented["left_hand_shape"][..., 0] *= -1.0
+        else:
+            for key in ("right_hand_shape", "left_hand_shape"):
+                if key in augmented:
+                    augmented[key] = augmented[key].copy()
+                    augmented[key][..., 0] *= -1.0
+
+        if "face_landmarks_norm" in augmented:
+            augmented["face_landmarks_norm"] = augmented["face_landmarks_norm"].copy()
+            augmented["face_landmarks_norm"][..., 0] *= -1.0
+
+        if "dual_wrist_traj" in augmented:
+            seq = augmented["dual_wrist_traj"].copy()
+            seq = np.concatenate([seq[..., 3:], seq[..., :3]], axis=-1)
+            seq[..., 0] *= -1.0
+            seq[..., 3] *= -1.0
+            augmented["dual_wrist_traj"] = seq
+
+        if "hand_orientation" in augmented:
+            seq = augmented["hand_orientation"]
+            augmented["hand_orientation"] = np.concatenate([seq[..., 4:], seq[..., :4]], axis=-1)
+
+    for key, seq in augmented.items():
+        if mirror:
+            seq = seq.astype(np.float32)
+        out[key] = _uniform_resample(seq, cfg.t_max)
+
+    new_valid_len = int(np.clip(stretched_len, 1, cfg.t_max))
+    valid_mask = np.zeros((cfg.t_max,), dtype=np.bool_)
+    valid_mask[:new_valid_len] = True
+    out["valid_mask"] = valid_mask
+    out["valid_length"] = np.int64(new_valid_len)
+    return out
+
+
 def _rotation_y(points: np.ndarray, angle_rad: float) -> np.ndarray:
     c, s = np.cos(angle_rad), np.sin(angle_rad)
     rot = np.array([[c, 0.0, s], [0.0, 1.0, 0.0], [-s, 0.0, c]], dtype=np.float32)

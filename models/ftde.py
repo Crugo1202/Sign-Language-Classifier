@@ -44,10 +44,13 @@ class FTDEDual(nn.Module):
         lstm_layers: int = 2,
         alpha_finsler: float = 1.5,
         temperature_tau: float = 0.5,
+        dropout: float = 0.0,
+        attn_dropout: float | None = None,
     ):
         super().__init__()
         self.alpha_finsler = alpha_finsler
         self.temperature_tau = temperature_tau
+        attn_dropout = dropout if attn_dropout is None else attn_dropout
 
         # 6 raw traj + 3 relative + 1 synchronization score
         self.causal_conv = CausalConv1d(10, conv_channels, kernel_size=conv_kernel)
@@ -59,8 +62,10 @@ class FTDEDual(nn.Module):
             num_layers=lstm_layers,
             batch_first=True,
             bidirectional=True,
-            dropout=0.1 if lstm_layers > 1 else 0.0,
+            dropout=dropout if lstm_layers > 1 else 0.0,
         )
+        self.lstm_dropout = nn.Dropout(dropout)
+        self.attn_dropout = nn.Dropout(attn_dropout)
         self.phi = nn.Sequential(
             nn.Linear(13, 64),
             nn.ReLU(inplace=True),
@@ -86,6 +91,7 @@ class FTDEDual(nn.Module):
         if valid_mask is not None:
             logits = logits.masked_fill(~valid_mask.bool().unsqueeze(-1), -1e4)
         weights = F.softmax(logits, dim=1)
+        weights = self.attn_dropout(weights)
         return weights
 
     def forward(
@@ -107,6 +113,7 @@ class FTDEDual(nn.Module):
         x = x.permute(0, 2, 1)  # (B, T, C)
 
         seq, _ = self.temporal_model(x)  # (B, T, 512)
+        seq = self.lstm_dropout(seq)
         weights = self._finsler_energy(dual_wrist_traj, valid_mask=valid_mask)  # (B, T, 1)
         pooled = torch.sum(weights * seq, dim=1)
         return pooled, seq

@@ -95,8 +95,11 @@ class TSSNEncoder(nn.Module):
         lstm_layers: int = 2,
         attn_heads: int = 8,
         output_dim: int = 512,
+        dropout: float = 0.0,
+        attn_dropout: float | None = None,
     ):
         super().__init__()
+        attn_dropout = dropout if attn_dropout is None else attn_dropout
         channels = [3, 64, 128, 256, 256]
         self.blocks = nn.ModuleList(
             [
@@ -113,12 +116,33 @@ class TSSNEncoder(nn.Module):
             num_layers=lstm_layers,
             batch_first=True,
             bidirectional=True,
-            dropout=0.1 if lstm_layers > 1 else 0.0,
+            dropout=dropout if lstm_layers > 1 else 0.0,
         )
+        self.lstm_dropout = nn.Dropout(dropout)
         self.temporal_attn = nn.MultiheadAttention(
-            embed_dim=hidden_size * 2, num_heads=attn_heads, batch_first=True
+            embed_dim=hidden_size * 2,
+            num_heads=attn_heads,
+            dropout=attn_dropout,
+            batch_first=True,
         )
         self.out_proj = nn.Linear(hidden_size * 2, output_dim)
+
+    @staticmethod
+    def _positional_encoding(
+        length: int,
+        dim: int,
+        device: torch.device,
+        dtype: torch.dtype,
+    ) -> torch.Tensor:
+        position = torch.arange(length, device=device, dtype=dtype).unsqueeze(1)
+        div_term = torch.exp(
+            torch.arange(0, dim, 2, device=device, dtype=dtype)
+            * (-torch.log(torch.tensor(10000.0, device=device, dtype=dtype)) / dim)
+        )
+        pe = torch.zeros(length, dim, device=device, dtype=dtype)
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term[: pe[:, 1::2].shape[1]])
+        return pe.unsqueeze(0)
 
     def forward(
         self, x: torch.Tensor, valid_mask: torch.Tensor | None = None
@@ -134,6 +158,10 @@ class TSSNEncoder(nn.Module):
         ms = torch.cat(feats, dim=-1)  # (B, T, 640)
         ms = self.multi_proj(ms)  # (B, T, 256)
         lstm_out, _ = self.temporal_model(ms)  # (B, T, 512)
+        lstm_out = self.lstm_dropout(lstm_out)
+        lstm_out = lstm_out + self._positional_encoding(
+            lstm_out.size(1), lstm_out.size(2), lstm_out.device, lstm_out.dtype
+        )
 
         key_padding_mask = None
         if valid_mask is not None:

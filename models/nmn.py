@@ -18,7 +18,7 @@ class NonManualNetwork(nn.Module):
 
     def __init__(
         self,
-        num_keypoints: int = 478,  # MediaPipe usually outputs 478 face keypoints
+        num_keypoints: int = 72,  # MediaPipe usually outputs 478, but we filter to 72 FACE_KEY_INDICES
         grouped_channels: int = 16,
         temporal_channels: int = 128,
         temporal_kernel: int = 5,

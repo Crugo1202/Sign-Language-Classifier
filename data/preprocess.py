@@ -372,6 +372,7 @@ def normalize_streams(
         "left_hand_shape": left_hand_shape.astype(np.float32),
         "dual_wrist_traj": dual_wrist_traj.astype(np.float32),
         "face_landmarks_norm": face_landmarks_norm.astype(np.float32),
+        "pose_landmarks": pose_33.astype(np.float32),
         "hand_orientation": np.concatenate([right_orientation, left_orientation], axis=-1).astype(
             np.float32
         ),
@@ -406,6 +407,7 @@ def preprocess_sample(
     streams["left_hand_shape"] = _uniform_resample(streams["left_hand_shape"], cfg.t_max)
     streams["dual_wrist_traj"] = _uniform_resample(streams["dual_wrist_traj"], cfg.t_max)
     streams["face_landmarks_norm"] = _uniform_resample(streams["face_landmarks_norm"], cfg.t_max)
+    streams["pose_landmarks"] = _uniform_resample(streams["pose_landmarks"], cfg.t_max)
     streams["hand_orientation"] = _uniform_resample(streams["hand_orientation"], cfg.t_max)
     valid_mask = np.zeros((cfg.t_max,), dtype=np.bool_)
     valid_mask[:valid_len] = True

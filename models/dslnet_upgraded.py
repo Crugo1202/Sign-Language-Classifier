@@ -88,6 +88,7 @@ class DSLNetUpgraded(nn.Module):
         right_shape = batch["right_hand_shape"]
         left_shape = batch["left_hand_shape"]
         dual_traj = batch["dual_wrist_traj"]
+        pose = batch["pose_landmarks"]
         face = batch["face_landmarks_norm"]
         valid_mask = batch.get("valid_mask", None)
 
@@ -95,7 +96,7 @@ class DSLNetUpgraded(nn.Module):
         left_seq, left_pool = self.left_tssn(left_shape, valid_mask=valid_mask)
         f_s = self.hand_fusion(right_seq, left_seq, valid_mask=valid_mask)
 
-        f_t, _ = self.ftde(dual_traj, valid_mask=valid_mask)
+        f_t, _ = self.ftde(pose, valid_mask=valid_mask)
         f_f, _ = self.nmn(face, valid_mask=valid_mask)
 
         f_final, enhanced = self.fusion(f_s, f_t, f_f)  # (B, 512)

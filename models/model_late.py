@@ -22,6 +22,7 @@ class TFTSignLateFusion(TFTSignLite):
         right_shape = batch["right_hand_shape"]
         left_shape = batch["left_hand_shape"]
         dual_traj = batch["dual_wrist_traj"]
+        pose = batch["pose_landmarks"]
         face = batch["face_landmarks_norm"]
         hand_orientation = batch.get("hand_orientation", None)
         valid_mask = batch.get("valid_mask", None)
@@ -30,7 +31,7 @@ class TFTSignLateFusion(TFTSignLite):
         left_seq, left_pool = self.left_tssn(left_shape, valid_mask=valid_mask)
         s_seq = self.input_dropout(self.norm_s_in(self.proj_s(torch.cat([right_seq, left_seq], dim=-1))))
 
-        _, t_seq = self.ftde(dual_traj, valid_mask=valid_mask)
+        _, t_seq = self.ftde(pose, valid_mask=valid_mask)
         t_seq = self.input_dropout(self.norm_t_in(self.proj_t(t_seq)))
 
         _, f_seq = self.nmn(face, valid_mask=valid_mask)

@@ -8,56 +8,56 @@ data:
   val_split: "val"
   test_split: "test"
   t_max: 64
-  num_workers: 4
+  num_workers: 8        # 稍微提升 data loader 速度
 
 train:
-  epochs: 300
-  patience: 50
-  batch_size: 16
-  learning_rate: 0.0002
-  weight_decay: 0.001
+  epochs: 200           # 正常模型不需要跑到 300 就能收斂
+  patience: 30
+  batch_size: 64        # ★ 重要：加大 Batch Size 讓梯度更穩定 (如果 VRAM 不夠再降為 32)
+  learning_rate: 0.0005 # Batch Size 加大，LR 也要跟著稍微拉高
+  weight_decay: 0.0005  # 降低權重衰減，釋放模型自由度
   warmup_epochs: 5
-  label_smoothing: 0.15
+  label_smoothing: 0.1  # 回歸標準的 0.1
   alpha_geo: 0.1
   beta_sym: 0.05
   grad_clip: 1.0
   save_dir: "checkpoints"
-  save_name: "top100_shrink_best.pt"
+  save_name: "top100_tune_healthy_best.pt"
 
 preprocess:
-  rotation_deg: 12.0
-  scale_range: [0.9, 1.1]
-  noise_std: 0.01
-  temporal_stretch: [0.85, 1.15]
-  mirror_prob: 0.3
+  rotation_deg: 10.0      # 降低旋轉干擾
+  scale_range: [0.9, 1.1] # 縮小縮放干擾
+  noise_std: 0.005        # 降低雜訊
+  temporal_stretch: [0.9, 1.1]
+  mirror_prob: 0.0        # ★ 絕對嚴禁翻轉：必須是 0.0！
   align_hands_to_palm: true
 
 model:
   tssn:
     k: 8
     temporal_kernel: 9
-    hidden_size: 128
-    lstm_layers: 1
-    attn_heads: 4
-    output_dim: 256
+    hidden_size: 256      # ★ 擴充腦容量
+    lstm_layers: 2        # 增加時序深度
+    attn_heads: 8         # 增加注意力頭數
+    output_dim: 512       # 拓寬輸出
   ftde:
-    conv_channels: 48
+    conv_channels: 64
     conv_kernel: 7
-    hidden_size: 128
-    lstm_layers: 1
+    hidden_size: 256
+    lstm_layers: 2
     alpha_finsler: 1.5
     temperature_tau: 0.5
   nmn:
     grouped_channels: 16
-    temporal_channels: 96
+    temporal_channels: 128
     temporal_kernel: 5
     hidden_size: 128
   orientation:
     hidden_dim: 64
   fusion:
-    hand_heads: 4
-    modal_heads: 4
-    shared_dim: 256
-    final_dim: 256
-    dropout: 0.3
-    modality_dropout: 0.15
+    hand_heads: 8
+    modal_heads: 8
+    shared_dim: 512       # ★ 確保進分類器前有足夠特徵
+    final_dim: 512        # ★ 512 維度對應 100 分類是非常健康的比例
+    dropout: 0.2          # 降低神經元丟棄率
+    modality_dropout: 0.1 # 減輕模態丟失的壓力

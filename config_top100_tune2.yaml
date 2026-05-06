@@ -36,28 +36,28 @@ model:
   tssn:
     k: 8
     temporal_kernel: 9
-    hidden_size: 128
+    hidden_size: 32
     lstm_layers: 1
-    attn_heads: 4
-    output_dim: 256
+    attn_heads: 2
+    output_dim: 64
   ftde:
-    conv_channels: 48
+    conv_channels: 16
     conv_kernel: 7
-    hidden_size: 128
+    hidden_size: 32
     lstm_layers: 1
     alpha_finsler: 1.5
     temperature_tau: 0.5
   nmn:
     grouped_channels: 16
-    temporal_channels: 96
+    temporal_channels: 32
     temporal_kernel: 5
-    hidden_size: 128
+    hidden_size: 32
   orientation:
-    hidden_dim: 64
+    hidden_dim: 16
   fusion:
-    hand_heads: 4
-    modal_heads: 4
-    shared_dim: 256
-    final_dim: 256
-    dropout: 0.35
-    modality_dropout: 0.2
+    hand_heads: 2
+    modal_heads: 2
+    shared_dim: 64
+    final_dim: 64
+    dropout: 0.5
+    modality_dropout: 0.3

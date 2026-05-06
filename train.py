@@ -318,14 +318,7 @@ def main() -> None:
 
         if val_metrics["top1"] > best_top1:
             best_top1 = val_metrics["top1"]
-            ckpt = {
-                "epoch": epoch,
-                "model": model.state_dict(),
-                "optimizer": optimizer.state_dict(),
-                "best_top1": best_top1,
-                "config": cfg,
-            }
-            torch.save(ckpt, save_path)
+            torch.save(model.state_dict(), save_path)
             print(f"Saved checkpoint to {save_path} (best top1={best_top1:.4f})")
 
 

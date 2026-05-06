@@ -148,8 +148,19 @@ class TSSNEncoder(nn.Module):
         self, x: torch.Tensor, valid_mask: torch.Tensor | None = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         # x: (B, T, 21, 3)
+        
+        # ==========================================
+        # ★ 必殺技：手腕正規化 (Wrist Normalization) ★
+        # ==========================================
+        # 抓出手腕 (Landmark 0) 的座標，並保持維度 (B, T, 1, 3)
+        wrist = x[:, :, 0:1, :]
+        # 讓所有 21 個點的座標減去手腕座標，把手腕強制變成 (0,0,0) 原點
+        x_norm = x - wrist
+        # ==========================================
+
         feats: List[torch.Tensor] = []
-        y = x
+        y = x_norm
+        
         for i, block in enumerate(self.blocks):
             y = block(y)
             if i in (1, 2, 3):
